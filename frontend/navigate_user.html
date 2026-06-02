@@ -8,6 +8,8 @@
 <meta http-equiv="Expires" content="0">
 <title>tpgFlex – Navigate (Blind)</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link rel="stylesheet" href="/static/profile_styles.css">
+<script src="/static/profile_manager.js"></script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0/dist/tf.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js"></script>
@@ -499,6 +501,9 @@ function buildInstruction(s) {
 // ── State ─────────────────────────────────────────────────────────────────────
 let userLat=null, userLng=null, stepCount=0;
 let routeSteps=[], currentStepIndex=0, isNavigating=false, gpsFirstFix=false;
+// Personalised walking params — overridden by tpgProfile on load
+let stepLengthMetres = 0.75;
+let maxWalkingMetres = null;   // null = no limit
 
 // ── Routing ───────────────────────────────────────────────────────────────────
 async function startNavigation(destName, toLat, toLng) {
@@ -515,6 +520,14 @@ async function startNavigation(destName, toLat, toLng) {
       setInstruction('Route unavailable','','Check connection',false); return;
     }
     const route=data.routes[0], leg=route.legs[0];
+
+    // Warn if route exceeds the user's declared max walking distance
+    if (maxWalkingMetres && leg.distance > maxWalkingMetres) {
+      const distStr = leg.distance > 1000
+        ? (leg.distance / 1000).toFixed(1) + ' km'
+        : Math.round(leg.distance) + ' m';
+      speak(`Warning: this route is ${distStr}, which exceeds your preferred maximum of ${maxWalkingMetres} metres.`, true);
+    }
 
     if (routeLine) map.removeLayer(routeLine);
     const coords = route.geometry.coordinates.map(c => [c[1], c[0]]);
@@ -839,6 +852,30 @@ function flashObstacle(cfg, ucfg, side) {
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 setTimeout(() => map.invalidateSize(), 200);
+// ── Profile integration ───────────────────────────────────────────────────────
+(async function applyUserProfile() {
+  try {
+    const prefs = await window.tpgProfile.applyUIMode();
+
+    // Personalised walking params
+    stepLengthMetres = prefs.step_length_metres || 0.75;
+    maxWalkingMetres = prefs.max_walking_distance || null;
+
+    // Patch speak() to use profile voice speed and language
+    const _speakOrig = window.speak || (() => {});
+    window.speak = function(text, urgent) {
+      if (!prefs.audio_feedback) return;
+      if (!window.speechSynthesis) return;
+      if (!urgent && window.speechSynthesis.speaking) return;
+      window.speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      u.rate = prefs.voice_speed || 1.0;
+      u.lang = prefs.preferred_language === 'fr' ? 'fr-FR' : 'en-US';
+      window.speechSynthesis.speak(u);
+    };
+  } catch(_) { /* keep defaults if profile fetch fails */ }
+})();
+
 startCamera();
 
 // GPS timeout — if no position in 4 s, fall back to Geneva and proceed

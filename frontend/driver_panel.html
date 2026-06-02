@@ -75,7 +75,6 @@ main {
   border-radius: 14px;
   padding: 16px 18px;
   margin-bottom: 20px;
-  display: none;
   align-items: center;
   gap: 14px;
   animation: shake .4s ease;
@@ -102,7 +101,7 @@ main {
   padding: 18px;
   transition: border-color .3s;
 }
-.req-card.pending  { border-color: #f97316; }
+.req-card.pending   { border-color: #f97316; }
 .req-card.confirmed { border-color: #22c55e; opacity: .7; }
 
 .req-header {
@@ -111,9 +110,9 @@ main {
   gap: 12px;
   margin-bottom: 12px;
 }
-.req-icon { font-size: 28px; }
+.req-icon  { font-size: 28px; }
 .req-title { font-size: 16px; font-weight: 800; }
-.req-sub { font-size: 12px; color: #6b7280; margin-top: 2px; }
+.req-sub   { font-size: 12px; color: #6b7280; margin-top: 2px; }
 .req-badge {
   margin-left: auto;
   padding: 4px 12px;
@@ -121,8 +120,35 @@ main {
   font-size: 11px;
   font-weight: 700;
 }
-.req-badge.pending    { background: #7c2d12; color: #fb923c; }
-.req-badge.confirmed  { background: #14532d; color: #4ade80; }
+.req-badge.pending   { background: #7c2d12; color: #fb923c; }
+.req-badge.confirmed { background: #14532d; color: #4ade80; }
+
+/* Passenger readiness cards */
+.req-card.rdy-ready   { border-color: #22c55e; }
+.req-card.rdy-walking { border-color: #3b82f6; }
+.req-card.rdy-waiting { border-color: #f59e0b; }
+.req-card.rdy-assist  { border-color: #ef4444; }
+.rdy-badge {
+  margin-left: auto;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.rdy-badge.ready   { background: #14532d; color: #4ade80; }
+.rdy-badge.walking { background: #1e3a8a; color: #93c5fd; }
+.rdy-badge.waiting { background: #78350f; color: #fbbf24; }
+.rdy-badge.assist  { background: #7f1d1d; color: #fca5a5; animation: pulse 2s infinite; }
+
+/* Driver wait / depart decision */
+.rdy-actions { display: flex; gap: 8px; }
+.rdy-actions .confirm-btn { padding: 13px; font-size: 14px; }
+.confirm-btn.wait          { background: #2563eb; }
+.confirm-btn.wait:hover    { background: #1d4ed8; }
+.confirm-btn.depart        { background: #dc2626; }
+.confirm-btn.depart:hover  { background: #b91c1c; }
+.confirmed-label.depart    { color: #fca5a5; }
 
 .req-details {
   display: grid;
@@ -130,13 +156,9 @@ main {
   gap: 8px;
   margin-bottom: 14px;
 }
-.detail-item {
-  background: #131620;
-  border-radius: 8px;
-  padding: 8px 12px;
-}
-.detail-lbl { font-size: 9px; color: #6b7280; text-transform: uppercase; letter-spacing: .8px; margin-bottom: 2px; }
-.detail-val { font-size: 13px; font-weight: 700; }
+.detail-item { background: #131620; border-radius: 8px; padding: 8px 12px; }
+.detail-lbl  { font-size: 9px; color: #6b7280; text-transform: uppercase; letter-spacing: .8px; margin-bottom: 2px; }
+.detail-val  { font-size: 13px; font-weight: 700; }
 
 .confirm-btn {
   width: 100%;
@@ -152,11 +174,7 @@ main {
   transition: background .2s, opacity .2s;
 }
 .confirm-btn:hover { background: #15803d; }
-.confirm-btn:disabled {
-  background: #1e293b;
-  color: #4b5563;
-  cursor: default;
-}
+.confirm-btn:disabled { background: #1e293b; color: #4b5563; cursor: default; }
 .confirmed-label {
   text-align: center;
   padding: 12px;
@@ -172,92 +190,6 @@ main {
 }
 #empty-state .empty-icon { font-size: 48px; margin-bottom: 12px; }
 #empty-state .empty-text { font-size: 15px; }
-
-/* ── Adaptive Waiting (accessibility) ───────────────────────────────────────── */
-.aw-tag {
-  display:inline-flex; align-items:center; gap:5px;
-  font-size:10px; font-weight:700; color:#60a5fa;
-  background:#1e3a5f; border:1px solid #3b82f6;
-  padding:2px 9px; border-radius:20px; margin-left:10px;
-}
-#aw-list { display:flex; flex-direction:column; gap:14px; margin-bottom:30px; }
-.aw-card {
-  background:#1a1d27; border:2px solid #3b82f6;
-  border-radius:16px; padding:18px;
-  transition:border-color .3s, opacity .3s;
-}
-.aw-card.held    { border-color:#22c55e; }
-.aw-card.departed{ border-color:#7f1d1d; opacity:.65; }
-.aw-top { display:flex; align-items:center; gap:12px; margin-bottom:14px; }
-.aw-ic  { font-size:30px; flex-shrink:0; }
-.aw-name{ font-size:16px; font-weight:800; }
-.aw-meta{ font-size:12px; color:#6b7280; margin-top:2px; }
-.aw-pill{
-  margin-left:auto; padding:4px 12px; border-radius:20px;
-  font-size:11px; font-weight:700;
-  background:#1e3a5f; color:#60a5fa;
-}
-.aw-card.held    .aw-pill{ background:#14532d; color:#4ade80; }
-.aw-card.departed .aw-pill{ background:#7f1d1d; color:#fca5a5; }
-.aw-card.arrived  { border-color:#22c55e; }
-.aw-card.arrived  .aw-pill{ background:#14532d; color:#4ade80; }
-
-/* Stats row: distance · ETA · movement */
-.aw-stats {
-  display:grid; grid-template-columns:auto auto 1fr; gap:18px;
-  align-items:center; margin-bottom:12px;
-}
-.aw-stat-v { font-size:24px; font-weight:900; line-height:1; }
-.aw-stat-v.m   { color:#f59e0b; }
-.aw-stat-v.eta { color:#e2e8f0; font-size:18px; }
-.aw-stat-l { font-size:9px; color:#6b7280; text-transform:uppercase;
-             letter-spacing:.7px; margin-top:4px; }
-.aw-move {
-  justify-self:end; display:inline-flex; align-items:center; gap:5px;
-  font-size:11px; font-weight:700; padding:5px 11px; border-radius:20px;
-}
-.aw-move.toward  { background:#14532d; color:#4ade80; }
-.aw-move.stopped { background:#422006; color:#fbbf24; }
-.aw-move.away    { background:#450a0a; color:#fca5a5; }
-
-.aw-suggest {
-  display:flex; align-items:center; gap:8px;
-  font-size:12px; color:#cbd5e1;
-  background:#0f1117; border:1px solid #ffffff10;
-  border-radius:10px; padding:9px 12px; margin-bottom:12px;
-}
-.aw-suggest b { color:#fff; }
-.aw-suggest .lbl { color:#6b7280; font-size:10px; text-transform:uppercase;
-                   letter-spacing:.6px; flex-shrink:0; }
-
-.aw-wait-row {
-  display:flex; justify-content:space-between; align-items:center;
-  font-size:10px; color:#6b7280; text-transform:uppercase;
-  letter-spacing:.6px; margin-bottom:5px;
-}
-.aw-wait-row b { color:#fbbf24; font-size:12px; }
-.aw-bar-wrap{ height:6px; background:#0f1117; border-radius:4px; overflow:hidden; margin-bottom:14px; }
-.aw-bar { height:100%; background:linear-gradient(to right,#22c55e,#f59e0b);
-          border-radius:4px; transition:width 1s linear; }
-.aw-actions{ display:flex; gap:10px; }
-.aw-btn {
-  flex:1; padding:13px; border:none; border-radius:11px;
-  font-size:13px; font-weight:800; cursor:pointer; color:#fff;
-}
-.aw-wait  { background:#16a34a; }
-.aw-wait:hover { background:#15803d; }
-.aw-go    { background:#374151; }
-.aw-go:hover   { background:#4b5563; }
-.aw-resolved{
-  text-align:center; padding:13px; font-weight:700; font-size:13px;
-}
-.aw-card.held    .aw-resolved{ color:#4ade80; }
-.aw-card.arrived .aw-resolved{ color:#4ade80; }
-.aw-card.departed .aw-resolved{ color:#fca5a5; }
-.aw-note {
-  font-size:10px; color:#4b5563; text-align:center;
-  margin:-6px 0 26px; letter-spacing:.3px;
-}
 </style>
 </head>
 <body>
@@ -280,10 +212,6 @@ main {
     </div>
   </div>
 
-  <div class="section-title">Adaptive Waiting <span class="aw-tag">♿ Accessibility</span></div>
-  <div id="aw-list"></div>
-  <div class="aw-note">Demo preview · passengers with an accessibility profile who haven't reached the stop yet</div>
-
   <div class="section-title">Ramp Requests</div>
   <div id="requests-list">
     <div id="empty-state">
@@ -294,8 +222,8 @@ main {
 </main>
 
 <script>
-const API = "";   // same origin
-const cards = {}; // req_id → card element
+const API = "";
+const cards = {};
 
 function setConnected(live) {
   document.getElementById("conn-dot").classList.toggle("live", live);
@@ -320,14 +248,12 @@ function fmtTime(iso) {
 
 function showAlert(ramp) {
   const banner = document.getElementById("alert-banner");
-  document.getElementById("alert-msg").textContent =
-    `🔔 Ramp needed at ${ramp.stop_name}`;
+  document.getElementById("alert-msg").textContent = `🔔 Ramp needed at ${ramp.stop_name}`;
   document.getElementById("alert-sub").textContent =
     `Vehicle ${ramp.vehicle_id} · ${profileLabel(ramp.profile)}`;
   banner.classList.add("visible");
   setTimeout(() => banner.classList.remove("visible"), 6000);
 
-  // Browser notification if permitted
   if (Notification.permission === "granted") {
     new Notification("tpgFlex — Ramp Request", {
       body: `Open ramp at ${ramp.stop_name} for ${profileLabel(ramp.profile)} (${ramp.vehicle_id})`,
@@ -340,12 +266,7 @@ function addCard(ramp) {
   const empty = document.getElementById("empty-state");
   if (empty) empty.remove();
 
-  const existing = cards[ramp.id];
-  if (existing) {
-    // Update existing card status
-    updateCardStatus(ramp);
-    return;
-  }
+  if (cards[ramp.id]) { updateCardStatus(ramp); return; }
 
   const div = document.createElement("div");
   div.className = `req-card ${ramp.status}`;
@@ -364,7 +285,7 @@ function addCard(ramp) {
     <div class="req-details">
       <div class="detail-item">
         <div class="detail-lbl">Stop</div>
-        <div class="detail-val" id="detail-stop-${ramp.id}">${ramp.stop_name}</div>
+        <div class="detail-val">${ramp.stop_name}</div>
       </div>
       <div class="detail-item">
         <div class="detail-lbl">Vehicle</div>
@@ -381,7 +302,7 @@ function addCard(ramp) {
     </div>
     <div id="action-${ramp.id}">
       ${ramp.status === "pending"
-        ? `<button class="confirm-btn" onclick="confirmRamp('${ramp.id}', '${ramp.stop_name}')">
+        ? `<button class="confirm-btn" onclick="confirmRamp('${ramp.id}')">
              ✅ Open Ramp Confirmed
            </button>`
         : `<div class="confirmed-label">✅ Ramp confirmed — passenger notified</div>`
@@ -407,16 +328,136 @@ function updateCardStatus(ramp) {
   }
 }
 
-async function confirmRamp(reqId, stopName) {
+async function confirmRamp(reqId) {
   const btn = document.querySelector(`#action-${reqId} .confirm-btn`);
   if (btn) { btn.disabled = true; btn.textContent = "Sending…"; }
   try {
     await fetch(`${API}/ramp-request/${reqId}/acknowledge`, { method: "POST" });
-    // updateCardStatus called via WS echo; if WS is down, update locally
     updateCardStatus({ id: reqId, status: "acknowledged", acknowledged_at: new Date().toISOString() });
   } catch(e) {
     if (btn) { btn.disabled = false; btn.textContent = "✅ Open Ramp Confirmed"; }
     alert("Failed to send confirmation. Please try again.");
+  }
+}
+
+// ── Passenger readiness status ────────────────────────────────────────────────
+const readinessCards = {};
+const READINESS = {
+  ready_at_stop:  { icon: "✅", text: "Ready at stop",       cls: "ready"   },
+  walking:        { icon: "🚶", text: "Walking to stop",     cls: "walking" },
+  need_more_time: { icon: "⏳", text: "Needs 2 more minutes", cls: "waiting" },
+  assistance:     { icon: "🆘", text: "Assistance requested", cls: "assist" },
+};
+
+function addReadinessCard(rec) {
+  const empty = document.getElementById("empty-state");
+  if (empty) empty.remove();
+
+  const cfg = READINESS[rec.status] || { icon: "📍", text: rec.label || rec.status, cls: "" };
+  // Delayed passengers (need more time / still walking) get a wait-or-depart choice.
+  const isDelayed = (rec.status === "need_more_time" || rec.status === "walking");
+
+  let actionHtml = "";
+  if (rec.acknowledged) {
+    if (rec.decision === "wait") {
+      actionHtml = `<div class="confirmed-label">⏳ Waiting for passenger</div>`;
+    } else if (rec.decision === "depart") {
+      actionHtml = `<div class="confirmed-label depart">🚐 Departing now</div>`;
+    } else {
+      actionHtml = `<div class="confirmed-label">✅ Acknowledged ${rec.acknowledged_at ? "at " + fmtTime(rec.acknowledged_at) : ""}</div>`;
+    }
+  } else if (isDelayed) {
+    actionHtml = `
+      <div class="rdy-actions">
+        <button class="confirm-btn wait"   onclick="respondReadiness('${rec.booking_id}','wait')">⏳ Wait</button>
+        <button class="confirm-btn depart" onclick="respondReadiness('${rec.booking_id}','depart')">🚐 Depart now</button>
+      </div>`;
+  } else if (rec.status === "assistance") {
+    actionHtml = `<button class="confirm-btn" onclick="acknowledgeReadiness('${rec.booking_id}')">👍 Acknowledge</button>`;
+  }
+
+  const html = `
+    <div class="req-header">
+      <div>
+        <div class="req-title">${cfg.icon} ${cfg.text}</div>
+        <div class="req-sub">${profileLabel(rec.profile)} · Booking ${rec.booking_id}</div>
+      </div>
+      <div class="rdy-badge ${cfg.cls}">${cfg.text}</div>
+    </div>
+    <div class="req-details">
+      <div class="detail-item">
+        <div class="detail-lbl">Stop</div>
+        <div class="detail-val">${rec.stop_name || "—"}</div>
+      </div>
+      <div class="detail-item">
+        <div class="detail-lbl">Vehicle</div>
+        <div class="detail-val">${rec.vehicle_id || "—"}</div>
+      </div>
+      <div class="detail-item">
+        <div class="detail-lbl">Updated</div>
+        <div class="detail-val" style="font-size:12px">${fmtTime(rec.updated_at)}</div>
+      </div>
+    </div>
+    <div id="rdy-action-${rec.booking_id}">${actionHtml}</div>`;
+
+  let card = readinessCards[rec.booking_id];
+  if (!card) {
+    card = document.createElement("div");
+    card.id = `rdy-card-${rec.booking_id}`;
+    readinessCards[rec.booking_id] = card;
+    document.getElementById("requests-list").prepend(card);
+  }
+  card.className = `req-card rdy-${cfg.cls}`;
+  card.innerHTML = html;
+
+  if (rec.status === "assistance" && !rec.acknowledged) showReadinessAlert(rec);
+}
+
+function updateReadinessCard(rec) {
+  addReadinessCard(rec);   // re-render handles the acknowledged state too
+}
+
+async function acknowledgeReadiness(bookingId) {
+  const btn = document.querySelector(`#rdy-action-${bookingId} .confirm-btn`);
+  if (btn) { btn.disabled = true; btn.textContent = "Sending…"; }
+  try {
+    await fetch(`${API}/readiness/${bookingId}/acknowledge`, { method: "POST" });
+    // The broadcast echoes back a readiness_acknowledged that re-renders the card.
+  } catch (e) {
+    if (btn) { btn.disabled = false; btn.textContent = "👍 Acknowledge"; }
+    alert("Failed to send acknowledgement. Please try again.");
+  }
+}
+
+async function respondReadiness(bookingId, decision) {
+  const wrap = document.getElementById(`rdy-action-${bookingId}`);
+  if (wrap) wrap.querySelectorAll("button").forEach(b => b.disabled = true);
+  try {
+    await fetch(`${API}/readiness/${bookingId}/respond`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ decision })
+    });
+    // The broadcast echoes back a readiness_acknowledged that re-renders the card.
+  } catch (e) {
+    if (wrap) wrap.querySelectorAll("button").forEach(b => b.disabled = false);
+    alert("Failed to send decision. Please try again.");
+  }
+}
+
+function showReadinessAlert(rec) {
+  const banner = document.getElementById("alert-banner");
+  document.getElementById("alert-msg").textContent = `🆘 Assistance requested${rec.stop_name ? " at " + rec.stop_name : ""}`;
+  document.getElementById("alert-sub").textContent =
+    `${rec.vehicle_id ? "Vehicle " + rec.vehicle_id + " · " : ""}${profileLabel(rec.profile)}`;
+  banner.classList.add("visible");
+  setTimeout(() => banner.classList.remove("visible"), 6000);
+
+  if (Notification.permission === "granted") {
+    new Notification("tpgFlex — Assistance Requested", {
+      body: `Passenger needs assistance${rec.stop_name ? " at " + rec.stop_name : ""}`,
+      icon: ""
+    });
   }
 }
 
@@ -432,138 +473,17 @@ function connect() {
   ws.onmessage = e => {
     let msg;
     try { msg = JSON.parse(e.data); } catch { return; }
-    if (msg.type === "ramp_request") {
-      addCard(msg.data);
-      showAlert(msg.data);
-    } else if (msg.type === "ramp_acknowledged") {
-      updateCardStatus(msg.data);
-    }
+    if (msg.type === "ramp_request")    { addCard(msg.data); showAlert(msg.data); }
+    else if (msg.type === "ramp_acknowledged") { updateCardStatus(msg.data); }
+    else if (msg.type === "readiness_update")       { addReadinessCard(msg.data); }
+    else if (msg.type === "readiness_acknowledged") { updateReadinessCard(msg.data); }
   };
 }
 connect();
 
-// Request browser notification permission on page load
 if ("Notification" in window && Notification.permission === "default") {
   Notification.requestPermission();
 }
-
-// ── Adaptive Waiting — DEMO ONLY (static example data, no backend) ─────────────
-// Auto-shows on page open. Driver-Assisted Adaptive Waiting: the system shows
-// distance / ETA / movement + an advisory line; the DRIVER decides (Hold/Depart).
-const STD_WAIT = 120;   // standard wait window in seconds (2 min policy)
-
-const AW_DEMO = [
-  { id:"AW1", profile:"wheelchair-elderly", icon:"🦽", label:"Wheelchair · Elderly",
-    booking:"BK_4471", stop:"Cornavin",         metres:120, walk:1.0, dir:"toward" },
-];
-AW_DEMO.forEach(p => { p.wait = STD_WAIT; p._start = p.metres; });
-
-function awEta(p) {
-  if (p.dir !== "toward" || p.walk <= 0) return "ETA unknown";
-  const secs = Math.round(p.metres / p.walk);
-  const m = Math.floor(secs / 60), s = secs % 60;
-  return m > 0 ? `~${m} min ${s}s` : `~${s}s`;
-}
-function awMove(p) {
-  if (p.dir === "toward")  return { cls:"toward",  txt:"Moving toward stop ✓" };
-  if (p.dir === "stopped") return { cls:"stopped", txt:"Not moving" };
-  return { cls:"away", txt:"Moving away" };
-}
-function awSuggest(p) {
-  if (p.metres <= 15)                       return "At the stop — boarding now";
-  if (p.dir === "away")                     return "Moving away — <b>may not make this ride</b>";
-  if (p.dir === "stopped")                  return "Passenger has stopped — <b>may need a moment</b>";
-  if (p.metres / Math.max(p.walk,0.1) <= 90) return "Likely to arrive soon — <b>consider holding</b>";
-  return "On the way — moving toward the stop";
-}
-function fmt(secs) {
-  secs = Math.max(0, secs);
-  return `${Math.floor(secs/60)}:${String(secs%60).padStart(2,"0")}`;
-}
-
-function renderAW() {
-  const list = document.getElementById("aw-list");
-  list.innerHTML = "";
-  AW_DEMO.forEach(p => {
-    const div = document.createElement("div");
-    div.className = "aw-card" + (p.state ? " " + p.state : "");
-    div.id = "aw-" + p.id;
-
-    const pill = p.state === "held"     ? "Holding"
-               : p.state === "arrived"  ? "Arrived"
-               : p.state === "departed" ? "Departed" : "Approaching";
-
-    let body;
-    if (p.state === "arrived") {
-      body = `<div class="aw-resolved">✅ Passenger reached the stop — boarding now</div>`;
-    } else if (p.state === "departed") {
-      body = `<div class="aw-resolved">🚍 Departed — passenger notified they missed this bus</div>`;
-    } else {
-      const mv  = awMove(p);
-      const pct = Math.round((p.wait / STD_WAIT) * 100);
-      const held = p.state === "held";
-      body = `
-        <div class="aw-stats">
-          <div><div class="aw-stat-v m">${Math.round(p.metres)} m</div><div class="aw-stat-l">Distance</div></div>
-          <div><div class="aw-stat-v eta">${awEta(p)}</div><div class="aw-stat-l">Est. arrival</div></div>
-          <div class="aw-move ${mv.cls}">${mv.txt}</div>
-        </div>
-        <div class="aw-suggest">
-          <span class="lbl">Suggested</span>
-          <span>${awSuggest(p)}</span>
-        </div>
-        <div class="aw-wait-row">
-          <span>${held ? "Holding — extended wait" : "Standard wait"}</span>
-          <b>${fmt(p.wait)} remaining</b>
-        </div>
-        <div class="aw-bar-wrap"><div class="aw-bar" style="width:${pct}%"></div></div>
-        <div class="aw-actions">
-          <button class="aw-btn aw-wait" onclick="awHold('${p.id}')">⏱️ Hold +2 min</button>
-          <button class="aw-btn aw-go"   onclick="awResolve('${p.id}','departed')">Depart now</button>
-        </div>`;
-    }
-
-    div.innerHTML = `
-      <div class="aw-top">
-        <div class="aw-ic">${p.icon}</div>
-        <div>
-          <div class="aw-name">Passenger approaching</div>
-          <div class="aw-meta">${p.label} · Booking ${p.booking} · → ${p.stop}</div>
-        </div>
-        <div class="aw-pill">${pill}</div>
-      </div>${body}`;
-    list.appendChild(div);
-  });
-}
-
-function awHold(id) {
-  const p = AW_DEMO.find(x => x.id === id);
-  if (!p || p.state === "departed" || p.state === "arrived") return;
-  p.state = "held";
-  p.wait += STD_WAIT;          // driver consciously extends
-  renderAW();
-}
-function awResolve(id, state) {
-  const p = AW_DEMO.find(x => x.id === id);
-  if (p && p.state !== "arrived") p.state = state;
-  renderAW();
-}
-
-// Simulated live progression so the demo runs itself on screen
-setInterval(() => {
-  let changed = false;
-  AW_DEMO.forEach(p => {
-    if (p.state === "arrived" || p.state === "departed") return;
-    if (p.dir === "toward" && p.walk > 0) { p.metres = Math.max(0, p.metres - p.walk); }
-    p.wait -= 1;
-    if (p.metres <= 0) { p.state = "arrived"; }
-    else if (p.wait <= 0 && p.state !== "held") { p.state = "departed"; }
-    changed = true;
-  });
-  if (changed) renderAW();
-}, 1000);
-
-renderAW();   // shows immediately on page open
 </script>
 </body>
 </html>

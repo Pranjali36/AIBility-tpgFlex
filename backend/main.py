@@ -20,6 +20,7 @@ from backend.agent.booking_engine import (
     nearest_stop_to_coords
 )
 from backend.database import get_conn
+from backend import user_profile as _up
 
 app = FastAPI(title="tpgFlex Voice Booking API", version="1.0.0")
 
@@ -30,6 +31,31 @@ _booking_context: dict[str, dict] = {}
 # Ramp requests store + connected driver WebSocket clients
 _ramp_requests: dict[str, dict] = {}
 _driver_clients: list[WebSocket] = []
+
+# Passenger readiness status — latest status per booking_id. A privacy-friendly
+# alternative to live location tracking: the passenger declares their state and
+# the driver panel sees it in real time over /ws/driver.
+_readiness_status: dict[str, dict] = {}
+
+READINESS_LABELS = {
+    "ready_at_stop":  "Ready at stop",
+    "walking":        "Walking to stop",
+    "need_more_time": "Need 2 more minutes",
+    "assistance":     "Request assistance",
+}
+
+
+async def _broadcast_driver(payload: dict) -> None:
+    """Send a JSON payload to every connected driver panel; drop dead sockets."""
+    dead = []
+    for ws in _driver_clients:
+        try:
+            await ws.send_text(json.dumps(payload))
+        except Exception:
+            dead.append(ws)
+    for ws in dead:
+        if ws in _driver_clients:
+            _driver_clients.remove(ws)
 
 app.add_middleware(
     CORSMiddleware,
@@ -326,6 +352,82 @@ def list_pending_ramp_requests():
     return [r for r in _ramp_requests.values() if r["status"] == "pending"]
 
 
+# ── Passenger readiness status ───────────────────────────────────────────────
+
+class ReadinessBody(BaseModel):
+    booking_id: str
+    status: str                          # ready_at_stop | walking | need_more_time | assistance
+    stop_name: str = ""
+    vehicle_id: str = ""
+    user_id: str = "USR_001"
+    profile: str = "standard"
+
+
+@app.post("/readiness")
+async def set_readiness(req: ReadinessBody):
+    if req.status not in READINESS_LABELS:
+        raise HTTPException(400, f"Unknown status '{req.status}'. Use one of {list(READINESS_LABELS)}")
+    record = {
+        "booking_id":   req.booking_id,
+        "status":       req.status,
+        "label":        READINESS_LABELS[req.status],
+        "stop_name":    req.stop_name,
+        "vehicle_id":   req.vehicle_id,
+        "user_id":      req.user_id,
+        "profile":      req.profile,
+        "acknowledged": False,
+        "decision":     None,            # wait | depart (driver's response)
+        "updated_at":   datetime.now().isoformat(),
+        "acknowledged_at": None,
+    }
+    _readiness_status[req.booking_id] = record
+    await _broadcast_driver({"type": "readiness_update", "data": record})
+    return record
+
+
+@app.get("/readiness")
+def list_readiness():
+    return list(_readiness_status.values())
+
+
+@app.get("/readiness/{booking_id}")
+def get_readiness(booking_id: str):
+    rec = _readiness_status.get(booking_id)
+    if not rec:
+        raise HTTPException(404, "No readiness status for this booking")
+    return rec
+
+
+@app.post("/readiness/{booking_id}/acknowledge")
+async def acknowledge_readiness(booking_id: str):
+    rec = _readiness_status.get(booking_id)
+    if not rec:
+        raise HTTPException(404, "No readiness status for this booking")
+    rec["acknowledged"] = True
+    rec["acknowledged_at"] = datetime.now().isoformat()
+    await _broadcast_driver({"type": "readiness_acknowledged", "data": rec})
+    return rec
+
+
+class ReadinessResponseBody(BaseModel):
+    decision: str   # wait | depart
+
+
+@app.post("/readiness/{booking_id}/respond")
+async def respond_readiness(booking_id: str, body: ReadinessResponseBody):
+    """Driver responds to a delayed passenger: 'wait' for them or 'depart' now."""
+    if body.decision not in ("wait", "depart"):
+        raise HTTPException(400, "decision must be 'wait' or 'depart'")
+    rec = _readiness_status.get(booking_id)
+    if not rec:
+        raise HTTPException(404, "No readiness status for this booking")
+    rec["decision"] = body.decision
+    rec["acknowledged"] = True
+    rec["acknowledged_at"] = datetime.now().isoformat()
+    await _broadcast_driver({"type": "readiness_acknowledged", "data": rec})
+    return rec
+
+
 @app.websocket("/ws/driver")
 async def driver_ws(websocket: WebSocket):
     await websocket.accept()
@@ -335,6 +437,12 @@ async def driver_ws(websocket: WebSocket):
     for r in pending:
         try:
             await websocket.send_text(json.dumps({"type": "ramp_request", "data": r}))
+        except Exception:
+            break
+    # Replay the latest readiness status for each active booking
+    for rec in _readiness_status.values():
+        try:
+            await websocket.send_text(json.dumps({"type": "readiness_update", "data": rec}))
         except Exception:
             break
     try:
@@ -353,7 +461,11 @@ app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")
 
 @app.get("/")
 def serve_frontend():
-    return FileResponse(os.path.join(FRONTEND_DIR, "index.html"))
+    # no-cache so browsers always pick up the latest UI (avoids stale-page confusion)
+    return FileResponse(
+        os.path.join(FRONTEND_DIR, "index.html"),
+        headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
+    )
 
 
 # ── Blind navigation additions ─────────────────────────────────────────────────
@@ -449,18 +561,151 @@ def _enrich_pedestrian_steps(osrm: dict) -> dict:
 
 
 @app.get("/api/route")
-async def get_route(from_lat: float, from_lng: float, to_lat: float, to_lng: float):
+async def get_route(from_lat: float, from_lng: float, to_lat: float, to_lng: float,
+                    user_id: str | None = None):
     url = (
         f"http://router.project-osrm.org/route/v1/foot/"
         f"{from_lng},{from_lat};{to_lng},{to_lat}"
         f"?steps=true&geometries=geojson&overview=full&annotations=false"
     )
+    max_walking = None
+    if user_id:
+        try:
+            prefs = _up.get_ui_preferences(user_id)
+            max_walking = prefs.get("max_walking_distance")
+        except Exception:
+            pass
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             r = await client.get(url)
-            return _enrich_pedestrian_steps(r.json())
+            result = _enrich_pedestrian_steps(r.json())
+            if max_walking is not None:
+                result["max_walking_distance_metres"] = max_walking
+            return result
     except Exception:
         return {"error": "routing failed"}
+
+
+from backend import stop_evaluator as _se
+
+
+# ── Stop Evaluator routes ──────────────────────────────────────────────────────
+
+@app.get("/api/stop-evaluator/stops")
+def evaluator_all_stops(profile: str = "all"):
+    """Return every active stop with its scores (for the map/list view)."""
+    conn = get_conn()
+    rows = conn.execute(
+        "SELECT stop_id FROM stops WHERE is_active = 1"
+    ).fetchall()
+    conn.close()
+    return [_se.evaluate_stop(r["stop_id"], profile) for r in rows]
+
+
+@app.get("/api/ride-experience")
+def ride_experience():
+    """Network-wide Ride Experience score, aggregated from all ride feedback."""
+    return _se.evaluate_ride_experience()
+
+
+@app.get("/api/stop-evaluator/{stop_id}")
+def evaluator_one_stop(stop_id: str, profile: str = "all"):
+    """Evaluate a single stop. profile: wheelchair|blind|deaf|low_digital|elderly|all"""
+    result = _se.evaluate_stop(stop_id, profile)
+    if "error" in result:
+        raise HTTPException(404, result["error"])
+    return result
+
+
+class ObservationRow(BaseModel):
+    stop_id: str
+    block_type: str   # accessibility | safety | experience
+    checked_item: str
+    source: str = "manual"
+
+
+@app.post("/api/stop-evaluator/sync")
+async def sync_epicollect(dry_run: bool = False):
+    """Pull the latest Epicollect survey entries and refresh stop scores.
+    Idempotent: replaces source='epicollect' observations; demo/manual rows kept.
+    Trigger manually, from a cron job, or enable the background poller via env."""
+    from backend import epicollect_sync
+    result = await epicollect_sync.sync(dry_run=dry_run)
+    if not result.get("ok"):
+        raise HTTPException(502, result.get("error", "Epicollect sync failed"))
+    return result
+
+
+@app.on_event("startup")
+async def _start_epicollect_poller():
+    from backend import epicollect_sync
+    epicollect_sync.start_background_sync()
+
+
+@app.post("/api/stop-evaluator/observations")
+def add_observations(rows: list[ObservationRow]):
+    """Bulk-insert observation rows (for testing without a CSV file)."""
+    conn = get_conn()
+    now = datetime.now().isoformat()
+    for row in rows:
+        conn.execute(
+            """INSERT INTO stop_observations
+               (stop_id, block_type, checked_item, source, submitted_at)
+               VALUES (?, ?, ?, ?, ?)""",
+            (row.stop_id, row.block_type, row.checked_item, row.source, now),
+        )
+    conn.commit()
+    conn.close()
+    return {"inserted": len(rows)}
+
+
+@app.get("/api/stops/search")
+def search_stops(q: str = ""):
+    """Fuzzy stop-name search used by the Stop Evaluator autocomplete."""
+    from difflib import get_close_matches
+    stops = get_all_stops()
+    if not q:
+        return stops[:10]
+    q_lower = q.lower()
+    # Substring match first (fast)
+    results = [s for s in stops if q_lower in s["name"].lower()]
+    if not results:
+        names = [s["name"] for s in stops]
+        matches = get_close_matches(q, names, n=5, cutoff=0.3)
+        results = [s for s in stops if s["name"] in matches]
+    return results[:8]
+
+
+def _resolve_scoring_profile(profile: str, user_id: str | None) -> str:
+    """Return the scoring profile to use, preferring explicit param over user's saved profile."""
+    if profile != "all":
+        return profile           # caller explicitly chose a profile → honour it
+    if user_id:
+        try:
+            return _up.get_scoring_profile(user_id)
+        except Exception:
+            pass
+    return "all"
+
+
+@app.get("/api/stops/evaluate-all")
+def evaluate_all_stops(profile: str = "all", user_id: str | None = None):
+    """All active stops with their 5-score evaluation. Used by the map view."""
+    effective = _resolve_scoring_profile(profile, user_id)
+    conn = get_conn()
+    rows = conn.execute("SELECT stop_id FROM stops WHERE is_active = 1").fetchall()
+    conn.close()
+    return [_se.evaluate_stop(r["stop_id"], effective) for r in rows]
+
+
+@app.get("/api/stops/evaluate/{stop_id}")
+def evaluate_one_stop(stop_id: str, profile: str = "all", user_id: str | None = None):
+    """5-score evaluation for a single stop. profile: wheelchair|blind|deaf|low_digital|elderly|all"""
+    effective = _resolve_scoring_profile(profile, user_id)
+    result = _se.evaluate_stop(stop_id, effective)
+    if "error" in result:
+        raise HTTPException(404, result["error"])
+    return result
 
 
 @app.get("/api/stops/nearby")
@@ -482,3 +727,98 @@ def stops_nearby(lat: float, lng: float):
         })
     results.sort(key=lambda x: x["distance_metres"])
     return results[:5]
+
+
+# ── User Profile routes ────────────────────────────────────────────────────────
+
+class ProfileCreateBody(BaseModel):
+    accessibility_profile: str = "standard"
+    display_name: str | None = None
+    secondary_needs: list[str] = []
+    preferred_language: str = "fr"
+    voice_speed: float = 1.0
+    high_contrast: bool = False
+    large_text: bool = False
+    haptic_feedback: bool = True
+    audio_feedback: bool = True
+    visual_feedback: bool = True
+    auto_announce_stops: bool = False
+    step_length_metres: float = 0.75
+    max_walking_distance: int = 500
+    emergency_contact: str | None = None
+
+
+class ProfilePatchBody(BaseModel):
+    accessibility_profile: str | None = None
+    display_name: str | None = None
+    secondary_needs: list[str] | None = None
+    preferred_language: str | None = None
+    voice_speed: float | None = None
+    high_contrast: bool | None = None
+    large_text: bool | None = None
+    haptic_feedback: bool | None = None
+    audio_feedback: bool | None = None
+    visual_feedback: bool | None = None
+    auto_announce_stops: bool | None = None
+    step_length_metres: float | None = None
+    max_walking_distance: int | None = None
+    emergency_contact: str | None = None
+
+
+@app.get("/api/profiles/available")
+def profiles_available():
+    """List all selectable profile types with their metadata."""
+    return [
+        {"key": k, "label": v["label"], "icon": v["icon"], "ui_mode": v["ui_mode"]}
+        for k, v in _up.PROFILES.items()
+    ]
+
+
+@app.get("/api/profile/{user_id}")
+def get_user_profile(user_id: str):
+    return _up.get_profile(user_id)
+
+
+@app.post("/api/profile/{user_id}")
+def save_user_profile(user_id: str, body: ProfileCreateBody):
+    """Create or replace a user profile (used by profile_setup.html)."""
+    return _up.create_profile(
+        user_id,
+        body.accessibility_profile,
+        display_name=body.display_name,
+        secondary_needs=body.secondary_needs,
+        preferred_language=body.preferred_language,
+        voice_speed=body.voice_speed,
+        high_contrast=int(body.high_contrast),
+        large_text=int(body.large_text),
+        haptic_feedback=int(body.haptic_feedback),
+        audio_feedback=int(body.audio_feedback),
+        visual_feedback=int(body.visual_feedback),
+        auto_announce_stops=int(body.auto_announce_stops),
+        step_length_metres=body.step_length_metres,
+        max_walking_distance=body.max_walking_distance,
+        emergency_contact=body.emergency_contact,
+    )
+
+
+@app.patch("/api/profile/{user_id}")
+def patch_user_profile(user_id: str, body: ProfilePatchBody):
+    """Partial update (used by profile_settings.html)."""
+    updates = {k: v for k, v in body.model_dump().items() if v is not None}
+    if not updates:
+        return _up.get_profile(user_id)
+    return _up.update_profile(user_id, updates)
+
+
+@app.delete("/api/profile/{user_id}")
+def delete_user_profile(user_id: str):
+    ok = _up.delete_profile(user_id)
+    if not ok:
+        raise HTTPException(404, f"Profile '{user_id}' not found")
+    return {"deleted": user_id}
+
+
+@app.get("/api/profile/{user_id}/ui-preferences")
+def get_ui_prefs(user_id: str):
+    """All UI-relevant preferences consumed by profile_manager.js."""
+    return _up.get_ui_preferences(user_id)

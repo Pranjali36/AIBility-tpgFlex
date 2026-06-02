@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>tpgFlex – Voice Booking</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link rel="stylesheet" href="/static/profile_styles.css">
+<script src="/static/profile_manager.js"></script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
   :root {
@@ -531,6 +533,50 @@
     animation: none;
   }
 
+  /* Passenger readiness status */
+  .readiness {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border);
+  }
+  .readiness-title {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+  .readiness-btns {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .rdy-btn {
+    padding: 9px 10px;
+    border: 1px solid var(--border);
+    background: #ffffff08;
+    color: var(--text);
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    text-align: center;
+    transition: background .15s, border-color .15s, color .15s;
+  }
+  .rdy-btn:hover { background: #ffffff14; }
+  .rdy-btn.assist { border-color: #5c1a1a; color: #f3a3a3; }
+  .rdy-btn.active {
+    background: var(--green);
+    border-color: var(--green);
+    color: #06270f;
+  }
+  .rdy-btn.assist.active { background: var(--red); border-color: var(--red); color: #fff; }
+  .readiness-status {
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--green);
+    min-height: 14px;
+  }
+
   /* Input bar */
   .input-bar {
     padding: 12px;
@@ -905,6 +951,8 @@
   <button style="margin-left:16px;padding:6px 14px;background:#16a34a;color:white;border-radius:8px;font-size:12px;font-weight:700;border:none;cursor:pointer;display:flex;align-items:center;gap:6px;">📞 Call Customer Care</button>
   <button onclick="openNavigate()" style="margin-left:8px;padding:6px 14px;background:#3b82f6;color:white;border-radius:8px;font-size:12px;font-weight:700;border:none;cursor:pointer;">🧭 Navigate</button>
   <a href="/static/driver_panel.html" target="_blank" style="margin-left:8px;padding:6px 14px;background:#f59e0b;color:#000;border-radius:8px;font-size:12px;font-weight:700;text-decoration:none;">🚐 Driver</a>
+  <a href="/static/stop_evaluator.html" target="_blank" style="margin-left:8px;padding:6px 14px;background:#7c3aed;color:white;border-radius:8px;font-size:12px;font-weight:700;text-decoration:none;">🚏 Evaluate Stops</a>
+  <a href="/static/profile_settings.html" target="_blank" id="manageProfileBtn" style="margin-left:8px;padding:6px 14px;background:#1e2235;border:1px solid #ffffff12;color:#e2e8f0;border-radius:8px;font-size:12px;font-weight:700;text-decoration:none;display:none" title="Manage your accessibility profile">👤 My Profile</a>
   <button id="settingsBtn" onclick="openSettings()" title="Accessibility settings">
     ⚙️
     <div id="profileBadge" style="display:none">!</div>
@@ -1269,6 +1317,22 @@ async function addBookingCard(booking) {
       <div class="ramp-badge" id="ramp-badge-${booking.booking_id}">Pending</div>
     </div>` : "";
 
+  // Passenger readiness status — replaces live location tracking.
+  const bid = booking.booking_id;
+  window._readinessBookings = window._readinessBookings || {};
+  window._readinessBookings[bid] = { stop_name: booking.pickup, vehicle_id: booking.vehicle_id };
+  const readinessHtml = `
+    <div class="readiness" id="readiness-${bid}">
+      <div class="readiness-title">📍 Let your driver know</div>
+      <div class="readiness-btns">
+        <button class="rdy-btn" onclick="setReadiness('${bid}','ready_at_stop',this)">✅ Ready at stop</button>
+        <button class="rdy-btn" onclick="setReadiness('${bid}','walking',this)">🚶 Walking to stop</button>
+        <button class="rdy-btn" onclick="setReadiness('${bid}','need_more_time',this)">⏳ Need 2 more minutes</button>
+        <button class="rdy-btn assist" onclick="setReadiness('${bid}','assistance',this)">🆘 Request assistance</button>
+      </div>
+      <div class="readiness-status" id="readiness-status-${bid}"></div>
+    </div>`;
+
   const div = document.createElement("div");
   div.className = "booking-card";
   div.innerHTML = `
@@ -1281,6 +1345,7 @@ async function addBookingCard(booking) {
     <div class="row"><span class="label">Vehicle</span><span class="value">${booking.vehicle_id}</span></div>
     <div class="row"><span class="label">Passengers</span><span class="value">${booking.passengers}</span></div>
     ${rampRowHtml}
+    ${readinessHtml}
     ${navBtn}
   `;
   document.getElementById("chat").appendChild(div);
@@ -1611,6 +1676,75 @@ function pollRampStatus(rampId, bookingId) {
   }, 3000);
 }
 
+// ── Passenger Readiness Status ────────────────────────────────────────────────
+const READINESS_TEXT = {
+  ready_at_stop:  "Ready at stop",
+  walking:        "Walking to stop",
+  need_more_time: "Need 2 more minutes",
+  assistance:     "Assistance requested",
+};
+
+async function setReadiness(bookingId, status, btn) {
+  const info = (window._readinessBookings || {})[bookingId] || {};
+  document.querySelectorAll(`#readiness-${bookingId} .rdy-btn`)
+          .forEach(b => b.classList.remove("active"));
+  if (btn) btn.classList.add("active");
+
+  const statusEl = document.getElementById(`readiness-status-${bookingId}`);
+  if (statusEl) statusEl.textContent = "Sending to driver…";
+
+  try {
+    await fetch(`${API}/readiness`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        booking_id: bookingId,
+        status,
+        stop_name:  info.stop_name  || "",
+        vehicle_id: info.vehicle_id || "",
+        user_id:    USER_ID,
+        profile:    userProfile
+      })
+    });
+    if (statusEl) statusEl.textContent = `✓ Driver notified — ${READINESS_TEXT[status]}`;
+    speak(status === "assistance"
+      ? "Assistance requested. Your driver has been notified."
+      : `Status updated: ${READINESS_TEXT[status]}.`);
+    pollReadinessAck(bookingId);
+  } catch (e) {
+    if (statusEl) statusEl.textContent = "Could not reach driver — please try again.";
+  }
+}
+
+function pollReadinessAck(bookingId) {
+  let tries = 0;
+  const t = setInterval(async () => {
+    if (++tries > 20) { clearInterval(t); return; }
+    try {
+      const r = await fetch(`${API}/readiness/${bookingId}`).then(r => r.json());
+      if (r.acknowledged) {
+        clearInterval(t);
+        const statusEl = document.getElementById(`readiness-status-${bookingId}`);
+        let txt = "✓ Driver acknowledged — they're aware";
+        let say = "Your driver has acknowledged your status.";
+        if (r.decision === "wait") {
+          txt = "⏳ Driver will wait for you — please head to the stop";
+          say = "Good news — your driver will wait for you. Please make your way to the stop.";
+        } else if (r.decision === "depart") {
+          txt = "🚐 Driver is departing now — please book the next ride";
+          say = "Your driver has to depart now. Please book the next available ride.";
+        }
+        if (statusEl) {
+          statusEl.textContent = txt;
+          if (r.decision === "depart") statusEl.style.color = "var(--red)";
+        }
+        speak(say);
+        scrollChat();
+      }
+    } catch (e) {}
+  }, 3000);
+}
+
 // ── Accessibility Profile ─────────────────────────────────────────────────────
 const PROFILES = {
   "blind":            { label: "Blind",            icon: "👁️" },
@@ -1787,6 +1921,40 @@ if (navigator.geolocation) {
     nearestStopName = await getNearestStopName(userLocation.lat, userLocation.lon);
   }, () => {}, { enableHighAccuracy: true, maximumAge: 5000 });
 }
+
+// ── Profile manager integration ───────────────────────────────────────────
+(async function initProfileManager() {
+  try {
+    const prefs = await window.tpgProfile.getPreferences();
+    // Show the manage-profile header button
+    const manageBtn = document.getElementById('manageProfileBtn');
+    if (manageBtn) {
+      manageBtn.textContent = prefs.icon + ' My Profile';
+      manageBtn.style.display = 'inline-block';
+    }
+    // Silently sync the in-page profile chip with the backend profile
+    if (prefs.accessibility_profile && prefs.accessibility_profile !== 'standard') {
+      // Map backend profile key → local PROFILES key if needed
+      const KEY_MAP = {
+        wheelchair: 'motor-wheelchair',
+        blind: 'blind',
+        deaf: 'deaf',
+      };
+      const localKey = KEY_MAP[prefs.accessibility_profile] || prefs.accessibility_profile;
+      if (PROFILES[localKey] && !userProfile) {
+        userProfile = localKey;
+        localStorage.setItem('tpgflex_profile', localKey);
+        applyProfile(localKey);
+      }
+    }
+    // Show setup banner only if still on default (standard) profile
+    if (prefs.accessibility_profile === 'standard') {
+      window.tpgProfile.showSetupBannerIfNeeded();
+    }
+  } catch(_) {
+    window.tpgProfile.showSetupBannerIfNeeded();
+  }
+})();
 </script>
 </body>
 </html>
