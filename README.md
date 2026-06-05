@@ -27,8 +27,7 @@ The accessibility-vulnerability research infrastructure described in this reposi
 
 Accessibility in public transport is not a convenience feature — it is a legal
 right under the **UN Convention on the Rights of Persons with Disabilities**,
-and it affects a large share of the population. The figures we used to frame the
-problem, with their sources, are:
+and it affects a large share of the population. Statistical sources:
 
 | Figure | Meaning | Source |
 |---|---|---|
@@ -67,15 +66,13 @@ organizations and interviews with their members. These insights shaped every
 layer of the system; I report them as the qualitative observations they are, not
 as quantitative findings.
 
-**Fondation Foyer-Handicap (visually-impaired residents).** Residents told us
-they prefer simple, accessible apps with clear information, and that the things
+**Fondation Foyer-Handicap:** Residents told us they prefer simple, accessible apps with clear information, and that the things
 that matter most to them are reliable **audio announcements** and trustworthy
 **accessibility details about each stop** (surface, obstacles, tactile guidance,
 real-time displays). This directly motivated the audio-guided navigation mode and
 the per-stop accessibility scoring.
 
-**Procap Genève (wheelchair user).** The main issues raised were **physical
-accessibility** — especially platform and vehicle height differences. The user
+**Procap Genève:** The main issues raised were **physical accessibility** — especially platform and vehicle height differences. The user
 plans trips in advance and asked for **simpler digital support** (tutorials,
 workshops, an AI assistant). This motivated the voice/tap booking flow, the ramp
 request system, and the wheelchair-specific scoring profile.
@@ -337,8 +334,8 @@ Then open <http://localhost:8000/>. Serve the pages through the backend (not via
 Refresh stop scores from the live CrowdSense survey at any time:
 
 ```bash
-python -m backend.epicollect_sync            # fetch + refresh
-python -m backend.epicollect_sync --dry-run  # preview, no DB write
+python -m backend.epicollect_sync            
+python -m backend.epicollect_sync --dry-run  
 ```
 
 ---
