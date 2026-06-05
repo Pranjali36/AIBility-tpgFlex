@@ -822,3 +822,110 @@ def delete_user_profile(user_id: str):
 def get_ui_prefs(user_id: str):
     """All UI-relevant preferences consumed by profile_manager.js."""
     return _up.get_ui_preferences(user_id)
+
+
+# ── Research routes (historical accessibility tracking) ────────────────────────
+# Data-collection endpoints for future accessibility vulnerability studies.
+# These only store and retrieve data; they do not analyse it. Scoring is still
+# owned entirely by stop_evaluator. See RESEARCH_README.md.
+
+from backend import research as _research
+
+
+class EventBody(BaseModel):
+    event_type: str                       # see research.EVENT_TYPES
+    description: str | None = None
+    severity: str = "medium"              # low | medium | high
+    started_at: str | None = None         # ISO datetime; defaults to now
+    resolved_at: str | None = None        # ISO datetime; None = ongoing
+    source: str = "manual_demo"           # see research.EVENT_SOURCES
+
+
+@app.get("/api/research/event-types")
+def research_event_types():
+    """The disruption event types the research branch tracks."""
+    return [{"key": k, "label": v} for k, v in _research.EVENT_TYPES.items()]
+
+
+@app.get("/api/research/event-sources")
+def research_event_sources():
+    """The standardized provenance channels an event can come from."""
+    return [{"key": k, "label": v} for k, v in _research.EVENT_SOURCES.items()]
+
+
+@app.get("/api/research/population-groups")
+def research_population_groups():
+    """The disability population groups tracked, and the profile each maps to."""
+    return [
+        {"key": k, "label": v["label"], "profile": v["profile"]}
+        for k, v in _research.POPULATION_GROUPS.items()
+    ]
+
+
+@app.get("/api/research/stops/{stop_id}/history")
+def research_history(stop_id: str, limit: int = 100):
+    """Stored accessibility snapshots for one stop, oldest first."""
+    result = _research.get_history(stop_id, limit=limit)
+    if "error" in result:
+        raise HTTPException(404, result["error"])
+    return result
+
+
+@app.post("/api/research/stops/{stop_id}/snapshot")
+def research_capture_snapshot(stop_id: str, source: str = "live"):
+    """Capture the stop's current scores into the history table (data collection)."""
+    result = _research.capture_snapshot(stop_id, source=source)
+    if "error" in result:
+        raise HTTPException(404, result["error"])
+    return result
+
+
+@app.get("/api/research/stops/{stop_id}/population-impact")
+def research_population_impact(stop_id: str):
+    """Current per-population accessibility metrics for one stop."""
+    result = _research.population_impact(stop_id)
+    if "error" in result:
+        raise HTTPException(404, result["error"])
+    return result
+
+
+@app.get("/api/research/stops/{stop_id}/observation-analytics")
+def research_observation_analytics(stop_id: str):
+    """Report counts and date range of observations for one stop."""
+    result = _research.observation_analytics(stop_id)
+    if "error" in result:
+        raise HTTPException(404, result["error"])
+    return result
+
+
+@app.get("/api/research/stops/{stop_id}/events")
+def research_stop_events(stop_id: str):
+    """All disruption events recorded for one stop."""
+    result = _research.get_events(stop_id)
+    if "error" in result:
+        raise HTTPException(404, result["error"])
+    return result
+
+
+@app.post("/api/research/stops/{stop_id}/events")
+def research_add_event(stop_id: str, body: EventBody):
+    """Record a disruption event for a stop (data collection)."""
+    result = _research.add_event(
+        stop_id,
+        body.event_type,
+        description=body.description,
+        severity=body.severity,
+        started_at=body.started_at,
+        resolved_at=body.resolved_at,
+        source=body.source,
+    )
+    if "error" in result:
+        code = 404 if "not found" in result["error"] else 400
+        raise HTTPException(code, result["error"])
+    return result
+
+
+@app.get("/api/research/events")
+def research_list_events(event_type: str | None = None, ongoing_only: bool = False):
+    """All recorded disruption events across stops (plain retrieval)."""
+    return _research.list_events(event_type=event_type, ongoing_only=ongoing_only)

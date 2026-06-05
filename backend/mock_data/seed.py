@@ -5,11 +5,15 @@ On hackathon day: replace SQLite with MySQL and point to real data.
 """
 
 import sqlite3
+import os
 import random
 from datetime import datetime, timedelta
 import uuid
 
-DB_PATH = "tpgflex.db"
+# Resolve the database next to this file (backend/mock_data/tpgflex.db) so the
+# seeder writes to the exact path backend/database.py reads from, regardless of
+# the current working directory it is launched from.
+DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tpgflex.db")
 
 # Real Geneva tpg stop names + coordinates
 STOPS = [
